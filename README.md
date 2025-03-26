@@ -199,12 +199,37 @@ python3 bluekeep_direct.py -i HEDEF_IP
 
 ## Sorun Giderme
 
-### Hedef kontrolü
+### RDP Servis Kontrolü
 
-Hedefin erişilebilir olup olmadığını kontrol edin:
+Exploitlerin başarısız olmasının en yaygın sebeplerinden biri hedef sistemde RDP servisinin olmaması veya servisin erişilebilir olmamasıdır. Bunu kontrol etmek için:
+
 ```bash
-python3 check_target.py -i HEDEF_IP -p 3389
+python3 check_rdp_detailed.py -i HEDEF_IP -p 3389
 ```
+
+Bu araç, aşağıdaki kontrolleri gerçekleştirir:
+
+1. Temel port erişilebilirlik kontrolü
+2. RDP protokol imza kontrolü
+3. Nmap ile servis tespiti (varsa)
+4. Metasploit ile güvenlik açığı kontrolü
+
+### Örnek RDP Sorun Giderme Adımları
+
+1. Önce temel RDP bağlantısını doğrulayın:
+   ```bash
+   nc -vz HEDEF_IP 3389
+   ```
+
+2. RDP servisini ve ayrıntılı bilgileri kontrol edin:
+   ```bash
+   python3 check_rdp_detailed.py -i HEDEF_IP
+   ```
+
+3. Sorun devam ederse, zorla exploit deneyin:
+   ```bash
+   python3 force_bluekeep.py -i HEDEF_IP
+   ```
 
 ### Metasploit ile ilgili sorunlar
 

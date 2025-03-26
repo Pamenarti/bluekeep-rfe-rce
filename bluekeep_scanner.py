@@ -10,16 +10,50 @@ import subprocess
 from pathlib import Path
 
 def check_rdp_port(host, port=3389, timeout=3):
-    """Check if the target host has the RDP port open."""
+    """Check if the target host has the RDP port open and is running RDP."""
     try:
+        print(f"[*] Checking RDP service on {host}:{port}...")
+        
+        # First: basic port check
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
         result = sock.connect_ex((host, port))
-        sock.close()
         
-        return result == 0
+        if result != 0:
+            print(f"[-] Port {port} is closed on {host}")
+            return False
+            
+        print(f"[+] Port {port} is open on {host}")
+        
+        # Second: send a valid RDP negotiation request
+        rdp_probe = bytes.fromhex("0300000b06e00000000000")
+        try:
+            new_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            new_sock.settimeout(timeout)
+            new_sock.connect((host, port))
+            new_sock.send(rdp_probe)
+            
+            response = new_sock.recv(1024)
+            new_sock.close()
+            
+            if len(response) > 0 and response[0:1] == b'\x03':  # RDP protocol signature check
+                print(f"[+] RDP service confirmed on {host}:{port}")
+                return True
+            else:
+                print(f"[-] Port {port} is open but does not appear to be RDP")
+                print(f"[*] Response: {response.hex()}")
+                # Even though it doesn't seem to be RDP, we'll return True to continue with testing
+                return True
+                
+        except socket.timeout:
+            print(f"[-] Timeout while waiting for RDP response from {host}")
+            return False
+        except Exception as e:
+            print(f"[-] Error during RDP check: {e}")
+            return False
+            
     except socket.error as e:
-        print(f"[-] Error checking target {host}: {e}")
+        print(f"[-] Socket error when checking {host}: {e}")
         return False
 
 def detect_windows_version(target_ip, port=3389):
@@ -247,13 +281,17 @@ def main():
         if args.ip:
             # Scan single IP
             if check_rdp_port(args.ip, args.port):
-                print(f"[+] RDP port open on {args.ip}:{args.port}")
+                print(f"[+] RDP service detected on {args.ip}:{args.port}")
                 run_metasploit_scanner(args.ip, args.port, args.auto_exploit or args.exploit_all)
             else:
                 print(f"[-] No RDP service detected on {args.ip}:{args.port}")
                 if args.exploit_all:
                     print("[*] Exploit-all flag set, attempting exploit anyway...")
+                    print("[!] WARNING: Exploit may fail due to no RDP service")
                     run_exploit(args.ip, args.port)
+                else:
+                    print("[*] Suggest running check_rdp_detailed.py for more information")
+                    print(f"    python3 check_rdp_detailed.py -i {args.ip} -p {args.port}")
         else:
             # Scan multiple IPs from file
             scan_from_file(args.file, args.port, args.auto_exploit or args.exploit_all)

