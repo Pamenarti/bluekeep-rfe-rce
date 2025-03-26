@@ -1,0 +1,5 @@
+use auxiliary/scanner/rdp/cve_2019_0708_bluekeep
+set RHOSTS 152.66.58.217
+set RPORT 3389
+run
+exit

